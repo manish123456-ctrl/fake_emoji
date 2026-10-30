@@ -10,7 +10,10 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, "public")));
-app.get("/health", (req, res) => res.json({ status: "ok" }));
+
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
 
 const PORT = process.env.PORT || 3000;
 const rooms = new Map();
@@ -22,32 +25,39 @@ const TIMERS = {
   results: 10
 };
 
+const RECONNECT_GRACE_PERIOD = 30 * 1000;
+const SEAT_RETENTION_PERIOD = 5 * 60 * 1000;
+
 const BOARDS = {
-  "Food": [
+  Food: [
     "Pizza", "Dosa", "Burger", "Biryani",
     "Ice Cream", "Samosa", "Pasta", "Idli",
     "Mango", "Chocolate", "Pani Puri", "Noodles",
     "Sandwich", "Jalebi", "Popcorn", "Pav Bhaji"
   ],
-  "Animals": [
+
+  Animals: [
     "Lion", "Tiger", "Elephant", "Monkey",
     "Dog", "Cat", "Giraffe", "Penguin",
     "Dolphin", "Snake", "Rabbit", "Kangaroo",
     "Crocodile", "Peacock", "Panda", "Horse"
   ],
+
   "Desi Life": [
     "Auto Rickshaw", "Cricket", "Chai", "Bollywood",
     "Wedding", "Monsoon", "Traffic Jam", "Street Food",
     "Train Journey", "Diwali", "Mango", "School",
     "Family Function", "Shopping", "Power Cut", "Chappal"
   ],
-  "Movies": [
+
+  Movies: [
     "Horror", "Comedy", "Romance", "Action",
     "Superhero", "Detective", "Adventure", "Animation",
     "Thriller", "Musical", "Fantasy", "Sci-Fi",
     "Drama", "Documentary", "Western", "Mystery"
   ],
-  "Places": [
+
+  Places: [
     "Beach", "Airport", "Hospital", "School",
     "Restaurant", "Mountain", "Forest", "Museum",
     "Cinema", "Temple", "Library", "Stadium",
@@ -62,34 +72,40 @@ const EMOJI_CATEGORIES = {
     "😋","😎","🤔","🤫","🤭","😭","😡","🤯",
     "🥳","😴","🤗","😱","🤤","😏","🤩","😬"
   ],
+
   Food: [
     "🍎","🍊","🍋","🍉","🍇","🍓","🍒","🍍",
     "🥭","🍌","🍑","🥥","🍅","🥑","🥕","🌽",
     "🍕","🍔","🍟","🌭","🍿","🍩","🍪","🎂",
     "🍰","🍫","🍬","🍭","🍜","🍣","🍚","☕"
   ],
+
   Animals: [
     "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼",
     "🐨","🐯","🦁","🐮","🐷","🐸","🐵","🐔",
     "🐧","🐦","🦆","🦅","🦉","🦋","🐢","🐍",
     "🐬","🐳","🦈","🐘","🦒","🦓","🐎","🐄"
   ],
+
   Nature: [
     "🌞","🌝","🌙","⭐","🌈","☁️","🌧️","⛈️",
     "❄️","🔥","💧","🌊","🌸","🌹","🌻","🌳",
     "🌴","🍀","🌵","🍁","🌺","🌼","🌍","🌋"
   ],
+
   Activities: [
     "⚽","🏀","🏈","⚾","🎾","🏏","🏆","🎯",
     "🎮","🎲","🎸","🎹","🎤","🎧","🎬","🎨",
     "🚴","🏊","🏃","🧘","💃","🕺","🎭","🎪"
   ],
+
   Objects: [
     "🚗","🚕","🚌","🚂","✈️","🚀","🚲","🏍️",
     "🏠","🏰","🏫","🏥","📱","💻","⌚","📷",
     "💡","🔑","💎","🎁","💰","📚","✏️","🛏️",
     "🪑","🧸","🔔","🧲","🛠️","🧹","🧳","🕯️"
   ],
+
   Symbols: [
     "❤️","💔","💖","💯","💥","💫","✨","⚡",
     "☀️","❄️","🎵","🎶","🔒","🔓","✅","❌",
@@ -100,6 +116,10 @@ const EMOJI_CATEGORIES = {
 const ALLOWED_EMOJIS = new Set(
   Object.values(EMOJI_CATEGORIES).flat()
 );
+
+// --------------------------------------------------
+// BASIC UTILITIES
+// --------------------------------------------------
 
 function randomToken() {
   return crypto.randomBytes(24).toString("hex");
@@ -142,6 +162,10 @@ function getHost(room) {
   return room.players.find(p => p.id === room.hostId);
 }
 
+// --------------------------------------------------
+// PRIVATE GAME STATE
+// --------------------------------------------------
+
 function emitRoom(room) {
   room.players.forEach(player => {
     if (!player.socketId || !player.connected) return;
@@ -159,6 +183,7 @@ function emitRoom(room) {
     const view = {
       code: room.code,
       phase: room.phase,
+
       players: room.players.map(p => ({
         id: p.id,
         name: p.name,
@@ -166,12 +191,15 @@ function emitRoom(room) {
         late: p.late,
         isHost: p.id === room.hostId
       })),
+
       hostId: room.hostId,
       isHost: player.id === room.hostId,
       myId: player.id,
+
       myRole: isPlaying
         ? (isFaker ? "faker" : "player")
         : "waiting",
+
       category: room.category,
       board: room.board,
       rounds: room.rounds,
@@ -180,8 +208,10 @@ function emitRoom(room) {
       deadline: room.deadline,
       serverTime: Date.now(),
       timerLengths: TIMERS,
+
       myEmojis: room.emojis[player.id] || [],
       myVote: room.votes[player.id] || null,
+
       emojis: revealed
         ? Object.fromEntries(
             room.roundPlayers.map(id => [
@@ -190,18 +220,30 @@ function emitRoom(room) {
             ])
           )
         : null,
+
       lockedCount: room.roundPlayers.filter(
         id => room.emojis[id] !== undefined
       ).length,
+
       voteCount: Object.keys(room.votes).length,
       roundPlayerCount: room.roundPlayers.length,
+
+      // CRITICAL SECURITY:
+      // The Faker never receives the secret word.
       secretWord:
-        isPlaying && !isFaker ? room.secretWord : null,
-      guessOptions: isFaker && room.phase === "guessing"
-        ? room.board
-        : [],
+        isPlaying && !isFaker
+          ? room.secretWord
+          : null,
+
+      guessOptions:
+        isFaker && room.phase === "guessing"
+          ? room.board
+          : [],
+
       guessResult: room.guessResult,
       results: room.results,
+      lastRound: room.lastRound,
+
       scoreboard: room.players.map(p => ({
         id: p.id,
         name: p.name,
@@ -209,16 +251,23 @@ function emitRoom(room) {
         fakerTurns: p.fakerTurns,
         correctVotes: p.correctVotes
       })),
-      awards: room.awards,
-      lastRound: room.lastRound
+
+      awards: room.awards
     };
 
     io.to(player.socketId).emit("gameState", view);
   });
 }
 
+// --------------------------------------------------
+// TIMERS
+// --------------------------------------------------
+
 function clearTimer(room) {
-  if (room.timer) clearTimeout(room.timer);
+  if (room.timer) {
+    clearTimeout(room.timer);
+  }
+
   room.timer = null;
 }
 
@@ -235,13 +284,21 @@ function startTimer(room, seconds, callback) {
 
 function startPhase(room, phase, seconds, callback) {
   room.phase = phase;
+
   startTimer(room, seconds, callback);
+
   emitRoom(room);
 }
 
+// --------------------------------------------------
+// ROUND MANAGEMENT
+// --------------------------------------------------
+
 function chooseBoard(room) {
   const words = BOARDS[room.category] || BOARDS.Food;
+
   room.board = [...words];
+
   room.secretWord = room.board[
     Math.floor(Math.random() * room.board.length)
   ];
@@ -254,7 +311,6 @@ function selectFaker(room) {
 
   if (!eligible.length) return null;
 
-  // Shuffle a new Faker order only after everyone has had a turn.
   if (
     !room.fakerQueue.length ||
     room.fakerQueue.every(id => !eligible.includes(id))
@@ -279,6 +335,7 @@ function startRound(room) {
   if (active.length < 3) {
     room.phase = "lobby";
     room.message = "At least 3 connected players are required.";
+
     emitRoom(room);
     return;
   }
@@ -291,9 +348,10 @@ function startRound(room) {
   room.currentRound++;
 
   room.roundPlayers = active.map(p => p.id);
+
   room.roundPlayers.forEach(id => {
     const p = room.players.find(player => player.id === id);
-    p.late = false;
+    if (p) p.late = false;
   });
 
   room.emojis = {};
@@ -313,7 +371,10 @@ function startRound(room) {
     return;
   }
 
-  const faker = room.players.find(p => p.id === room.fakerId);
+  const faker = room.players.find(
+    p => p.id === room.fakerId
+  );
+
   if (faker) faker.fakerTurns++;
 
   startPhase(room, "picking", TIMERS.picking, () => {
@@ -324,9 +385,10 @@ function startRound(room) {
 function endPicking(room) {
   if (room.phase !== "picking") return;
 
-  // Missing clues are represented as an empty list ("no emojis").
   room.roundPlayers.forEach(id => {
-    if (!room.emojis[id]) room.emojis[id] = [];
+    if (!room.emojis[id]) {
+      room.emojis[id] = [];
+    }
   });
 
   startPhase(room, "voting", TIMERS.voting, () => {
@@ -342,12 +404,20 @@ function endVoting(room) {
   room.roundPlayers.forEach(id => {
     const vote = room.votes[id];
 
-    if (vote && room.roundPlayers.includes(vote) && vote !== id) {
+    if (
+      vote &&
+      room.roundPlayers.includes(vote) &&
+      vote !== id
+    ) {
       counts[vote] = (counts[vote] || 0) + 1;
     }
   });
 
-  const maxVotes = Math.max(0, ...Object.values(counts));
+  const maxVotes = Math.max(
+    0,
+    ...Object.values(counts)
+  );
+
   const leaders = Object.keys(counts).filter(
     id => counts[id] === maxVotes
   );
@@ -357,7 +427,6 @@ function endVoting(room) {
     leaders.length === 1 &&
     leaders[0] === room.fakerId;
 
-  // Voting correctly for the Faker earns one point.
   const roundPoints = {};
 
   room.roundPlayers.forEach(id => {
@@ -365,6 +434,7 @@ function endVoting(room) {
 
     if (room.votes[id] === room.fakerId) {
       const player = room.players.find(p => p.id === id);
+
       if (player) {
         player.score += 1;
         player.correctVotes++;
@@ -378,7 +448,9 @@ function endVoting(room) {
   room.roundPoints = roundPoints;
 
   if (!fakerCaught) {
-    const faker = room.players.find(p => p.id === room.fakerId);
+    const faker = room.players.find(
+      p => p.id === room.fakerId
+    );
 
     if (faker) {
       faker.score += 3;
@@ -405,7 +477,9 @@ function resolveGuess(room, guess) {
   };
 
   if (correct) {
-    const faker = room.players.find(p => p.id === room.fakerId);
+    const faker = room.players.find(
+      p => p.id === room.fakerId
+    );
 
     if (faker) {
       faker.score += 2;
@@ -416,6 +490,7 @@ function resolveGuess(room, guess) {
       if (id === room.fakerId) return;
 
       const player = room.players.find(p => p.id === id);
+
       if (player) {
         player.score += 1;
         room.roundPoints[id] += 1;
@@ -429,11 +504,15 @@ function resolveGuess(room, guess) {
 function finishRound(room, outcome) {
   clearTimer(room);
 
-  const faker = room.players.find(p => p.id === room.fakerId);
+  const faker = room.players.find(
+    p => p.id === room.fakerId
+  );
 
   const voteDetails = room.roundPlayers.map(id => {
     const voter = room.players.find(p => p.id === id);
-    const voted = room.players.find(p => p.id === room.votes[id]);
+    const voted = room.players.find(
+      p => p.id === room.votes[id]
+    );
 
     return {
       voter: voter ? voter.name : "Unknown",
@@ -452,6 +531,7 @@ function finishRound(room, outcome) {
     outcome,
     votes: voteDetails,
     voteCounts: room.voteCounts || {},
+
     points: room.roundPlayers.map(id => {
       const p = room.players.find(player => player.id === id);
 
@@ -462,9 +542,14 @@ function finishRound(room, outcome) {
         total: p ? p.score : 0
       };
     }),
+
     emojis: Object.fromEntries(
-      room.roundPlayers.map(id => [id, room.emojis[id] || []])
+      room.roundPlayers.map(id => [
+        id,
+        room.emojis[id] || []
+      ])
     ),
+
     guessResult: room.guessResult
   };
 
@@ -476,6 +561,10 @@ function finishRound(room, outcome) {
     }
   });
 }
+
+// --------------------------------------------------
+// FINAL SCOREBOARD
+// --------------------------------------------------
 
 function finishGame(room) {
   clearTimer(room);
@@ -536,6 +625,10 @@ function finishGame(room) {
   emitRoom(room);
 }
 
+// --------------------------------------------------
+// HOST MANAGEMENT
+// --------------------------------------------------
+
 function promoteHost(room) {
   const next = room.players.find(p => p.connected);
 
@@ -544,15 +637,19 @@ function promoteHost(room) {
   if (!next) {
     clearTimer(room);
     rooms.delete(room.code);
-    return;
   }
 }
+
+// --------------------------------------------------
+// ROUND CANCELLATION
+// --------------------------------------------------
 
 function cancelRound(room, reason) {
   clearTimer(room);
 
   room.phase = "lobby";
   room.message = reason;
+
   room.fakerId = null;
   room.secretWord = null;
   room.roundPlayers = [];
@@ -563,7 +660,13 @@ function cancelRound(room, reason) {
   emitRoom(room);
 }
 
+// --------------------------------------------------
+// SOCKET REGISTRATION AND RECONNECTION
+// --------------------------------------------------
+
 function registerPlayer(socket, room, player, token) {
+  // Assign the new socket before any old socket
+  // disconnect event can process.
   player.socketId = socket.id;
   player.connected = true;
   player.disconnectedAt = null;
@@ -572,12 +675,18 @@ function registerPlayer(socket, room, player, token) {
   socket.data.token = token;
 
   socket.join(room.code);
+
   emitRoom(room);
 }
+
+// --------------------------------------------------
+// SOCKET EVENTS
+// --------------------------------------------------
 
 io.on("connection", socket => {
 
   socket.on("createRoom", ({ name, token, rounds, category }) => {
+
     if (typeof name !== "string" || !name.trim()) {
       return socket.emit("errorMessage", "Enter a nickname.");
     }
@@ -593,22 +702,28 @@ io.on("connection", socket => {
       players: [],
       hostId: null,
       phase: "lobby",
+
       rounds: [3, 5, 8].includes(Number(rounds))
         ? Number(rounds)
         : 3,
+
       currentRound: 0,
       category: BOARDS[category] ? category : "Food",
+
       board: [],
       secretWord: null,
       fakerId: null,
       fakerQueue: [],
+
       roundPlayers: [],
       emojis: {},
       votes: {},
       roundPoints: {},
+
       results: null,
       lastRound: null,
       awards: [],
+
       deadline: null,
       timer: null,
       message: ""
@@ -642,6 +757,7 @@ io.on("connection", socket => {
   });
 
   socket.on("joinRoom", ({ code, name, token }) => {
+
     code = String(code || "").toUpperCase();
 
     const room = rooms.get(code);
@@ -661,6 +777,7 @@ io.on("connection", socket => {
     let player = getPlayer(room, token);
 
     if (!player) {
+
       if (room.players.length >= 8) {
         return socket.emit("errorMessage", "Room is full.");
       }
@@ -679,8 +796,13 @@ io.on("connection", socket => {
       };
 
       room.players.push(player);
+
     } else {
+
+      // Reclaim the existing seat.
+      // This also invalidates the old socket.
       player.name = name.trim().slice(0, 20);
+
     }
 
     registerPlayer(socket, room, player, token);
@@ -692,14 +814,22 @@ io.on("connection", socket => {
     });
   });
 
+  // ------------------------------------------------
+  // START GAME
+  // ------------------------------------------------
+
   socket.on("startGame", () => {
+
     const room = rooms.get(socket.data.roomCode);
     if (!room) return;
 
     const player = getPlayer(room, socket.data.token);
 
     if (!player || player.id !== room.hostId) {
-      return socket.emit("errorMessage", "Only the host can start.");
+      return socket.emit(
+        "errorMessage",
+        "Only the host can start."
+      );
     }
 
     if (room.phase !== "lobby") return;
@@ -724,11 +854,18 @@ io.on("connection", socket => {
     startRound(room);
   });
 
+  // ------------------------------------------------
+  // HOST SETTINGS
+  // ------------------------------------------------
+
   socket.on("updateSettings", ({ rounds, category }) => {
+
     const room = rooms.get(socket.data.roomCode);
+
     if (!room || room.phase !== "lobby") return;
 
     const player = getPlayer(room, socket.data.token);
+
     if (!player || player.id !== room.hostId) return;
 
     if ([3, 5, 8].includes(Number(rounds))) {
@@ -742,12 +879,21 @@ io.on("connection", socket => {
     emitRoom(room);
   });
 
+  // ------------------------------------------------
+  // EMOJI SUBMISSION
+  // ------------------------------------------------
+
   socket.on("submitEmojis", emojis => {
+
     const room = rooms.get(socket.data.roomCode);
+
     if (!room || room.phase !== "picking") return;
 
     const player = getPlayer(room, socket.data.token);
-    if (!player || !room.roundPlayers.includes(player.id)) return;
+
+    if (!player || !room.roundPlayers.includes(player.id)) {
+      return;
+    }
 
     if (room.emojis[player.id] !== undefined) return;
 
@@ -776,8 +922,14 @@ io.on("connection", socket => {
     }
   });
 
+  // ------------------------------------------------
+  // VOTING
+  // ------------------------------------------------
+
   socket.on("submitVote", targetId => {
+
     const room = rooms.get(socket.data.roomCode);
+
     if (!room || room.phase !== "voting") return;
 
     const player = getPlayer(room, socket.data.token);
@@ -791,11 +943,13 @@ io.on("connection", socket => {
       return socket.emit("errorMessage", "Invalid vote.");
     }
 
-    // Votes may be changed until the voting phase ends.
+    // Players may change their vote until the timer ends.
     room.votes[player.id] = targetId;
 
     if (
-      room.roundPlayers.every(id => room.votes[id] !== undefined)
+      room.roundPlayers.every(id =>
+        room.votes[id] !== undefined
+      )
     ) {
       endVoting(room);
     } else {
@@ -803,32 +957,52 @@ io.on("connection", socket => {
     }
   });
 
+  // ------------------------------------------------
+  // FAKER GUESS
+  // ------------------------------------------------
+
   socket.on("submitGuess", word => {
+
     const room = rooms.get(socket.data.roomCode);
+
     if (!room || room.phase !== "guessing") return;
 
     const player = getPlayer(room, socket.data.token);
 
     if (!player || player.id !== room.fakerId) {
-      return socket.emit("errorMessage", "Only the Faker can guess.");
+      return socket.emit(
+        "errorMessage",
+        "Only the Faker can guess."
+      );
     }
 
     if (!room.board.includes(word)) {
-      return socket.emit("errorMessage", "Choose a word from the board.");
+      return socket.emit(
+        "errorMessage",
+        "Choose a word from the board."
+      );
     }
 
     resolveGuess(room, word);
   });
 
+  // ------------------------------------------------
+  // PLAY AGAIN
+  // ------------------------------------------------
+
   socket.on("playAgain", () => {
+
     const room = rooms.get(socket.data.roomCode);
+
     if (!room || room.phase !== "finished") return;
 
     const player = getPlayer(room, socket.data.token);
+
     if (!player || player.id !== room.hostId) return;
 
     room.currentRound = 0;
     room.fakerQueue = [];
+
     room.players.forEach(p => {
       p.score = 0;
       p.fakerTurns = 0;
@@ -838,9 +1012,17 @@ io.on("connection", socket => {
     startRound(room);
   });
 
+  // ------------------------------------------------
+  // VOLUNTARY LEAVE
+  // ------------------------------------------------
+
   socket.on("leaveRoom", () => {
     disconnectPlayer(socket, true);
   });
+
+  // ------------------------------------------------
+  // UNEXPECTED DISCONNECT
+  // ------------------------------------------------
 
   socket.on("disconnect", () => {
     disconnectPlayer(socket, false);
@@ -848,7 +1030,12 @@ io.on("connection", socket => {
 
 });
 
+// --------------------------------------------------
+// FIXED DISCONNECT HANDLER
+// --------------------------------------------------
+
 function disconnectPlayer(socket, voluntary) {
+
   const code = socket.data.roomCode;
   const token = socket.data.token;
 
@@ -858,53 +1045,161 @@ function disconnectPlayer(socket, voluntary) {
   if (!room) return;
 
   const player = getPlayer(room, token);
+
   if (!player) return;
+
+  // FIX 1:
+  // Ignore disconnect events from old sockets.
+  // If the player has already reconnected, their
+  // current socket ID will be different.
+  if (!voluntary && player.socketId !== socket.id) {
+    return;
+  }
+
+  // ------------------------------------------------
+  // VOLUNTARY LEAVE: IMMEDIATE ACTION
+  // ------------------------------------------------
+
+  if (voluntary) {
+
+    const wasHost = player.id === room.hostId;
+    const wasFaker = player.id === room.fakerId;
+
+    player.connected = false;
+    player.socketId = null;
+
+    // Remove the player immediately.
+    room.players = room.players.filter(
+      p => p.id !== player.id
+    );
+
+    if (wasFaker && room.phase !== "lobby") {
+      cancelRound(
+        room,
+        "The Faker left. This round was cancelled."
+      );
+    }
+
+    if (wasHost) {
+      promoteHost(room);
+    }
+
+    if (room.players.length === 0) {
+      clearTimer(room);
+      rooms.delete(code);
+      return;
+    }
+
+    emitRoom(room);
+    return;
+  }
+
+  // ------------------------------------------------
+  // UNEXPECTED DISCONNECT: START GRACE PERIOD
+  // ------------------------------------------------
 
   player.connected = false;
   player.socketId = null;
   player.disconnectedAt = Date.now();
 
-  if (player.id === room.fakerId && room.phase !== "lobby") {
-    cancelRound(room, "The Faker left. This round was cancelled.");
-  }
+  const disconnectTimestamp = player.disconnectedAt;
+  const playerId = player.id;
 
-  if (player.id === room.hostId) {
-    promoteHost(room);
-  }
-
-  if (voluntary) {
-    room.players = room.players.filter(p => p.id !== player.id);
-    if (room.hostId === player.id) promoteHost(room);
-  }
-
-  if (room.players.length === 0) {
-    clearTimer(room);
-    rooms.delete(code);
-    return;
-  }
-
+  // Keep the room and round running during the
+  // 30-second reconnection grace period.
   emitRoom(room);
+
+  // FIX 2:
+  // Only handle the disconnect after 30 seconds,
+  // and only if this player has not reconnected.
+  setTimeout(() => {
+
+    // The room may have been deleted meanwhile.
+    if (rooms.get(code) !== room) return;
+
+    const currentPlayer = room.players.find(
+      p => p.id === playerId
+    );
+
+    if (!currentPlayer) return;
+
+    // Player successfully reconnected.
+    if (currentPlayer.connected) return;
+
+    // A newer disconnect event replaced this one.
+    if (
+      currentPlayer.disconnectedAt !== disconnectTimestamp
+    ) {
+      return;
+    }
+
+    // Confirm that the player is still disconnected.
+    if (currentPlayer.socketId !== null) return;
+
+    const wasHost = currentPlayer.id === room.hostId;
+    const wasFaker = currentPlayer.id === room.fakerId;
+
+    // If the disconnected player was the Faker,
+    // cancel the round after the grace period.
+    if (wasFaker && room.phase !== "lobby") {
+      cancelRound(
+        room,
+        "The Faker disconnected and did not reconnect within 30 seconds. This round was cancelled."
+      );
+    }
+
+    // If the disconnected player was the host,
+    // transfer host privileges after the grace period.
+    if (wasHost) {
+      promoteHost(room);
+    }
+
+    emitRoom(room);
+
+  }, RECONNECT_GRACE_PERIOD);
 }
 
-setInterval(() => {
-  for (const [code, room] of rooms) {
-    // Remove disconnected seats after 5 minutes.
-    const cutoff = Date.now() - 5 * 60 * 1000;
+// --------------------------------------------------
+// DISCONNECTED SEAT CLEANUP
+// --------------------------------------------------
 
-    const expired = room.players.filter(
-      p => !p.connected &&
-        p.disconnectedAt &&
-        p.disconnectedAt < cutoff
+setInterval(() => {
+
+  for (const [code, room] of rooms) {
+
+    const cutoff = Date.now() - SEAT_RETENTION_PERIOD;
+
+    const expired = room.players.filter(p =>
+      !p.connected &&
+      p.disconnectedAt &&
+      p.disconnectedAt < cutoff
     );
 
     expired.forEach(p => {
-      room.players = room.players.filter(x => x.id !== p.id);
 
-      if (p.id === room.fakerId && room.phase !== "lobby") {
-        cancelRound(room, "The Faker disconnected. Round cancelled.");
+      // Do not remove a player who has reconnected.
+      if (p.connected) return;
+
+      room.players = room.players.filter(
+        x => x.id !== p.id
+      );
+
+      // If a disconnected Faker's seat expires,
+      // cancel the active round.
+      if (
+        p.id === room.fakerId &&
+        room.phase !== "lobby"
+      ) {
+        cancelRound(
+          room,
+          "The Faker's seat expired. This round was cancelled."
+        );
       }
 
-      if (p.id === room.hostId) promoteHost(room);
+      if (p.id === room.hostId) {
+        promoteHost(room);
+      }
+
     });
 
     if (!room.players.length) {
@@ -914,7 +1209,12 @@ setInterval(() => {
       emitRoom(room);
     }
   }
+
 }, 30000);
+
+// --------------------------------------------------
+// START SERVER
+// --------------------------------------------------
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Fakemoji running on port ${PORT}`);
