@@ -1,0 +1,1365 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#11101b">
+<title>Fakemoji — Bluff with Emojis!</title>
+
+<script src="/socket.io/socket.io.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+
+:root {
+  --bg: #11101b;
+  --panel: #1d1b2b;
+  --panel2: #27243a;
+  --purple: #a78bfa;
+  --pink: #f472b6;
+  --cyan: #67e8f9;
+  --green: #86efac;
+  --text: #f8f7ff;
+  --muted: #aaa5bd;
+  --border: #39354e;
+  --danger: #fb7185;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 10% 0%, #30234b 0, transparent 35%),
+    radial-gradient(circle at 90% 90%, #25204a 0, transparent 35%),
+    var(--bg);
+  color: var(--text);
+  font-family: 'Nunito', sans-serif;
+  min-height: 100vh;
+}
+
+button, input, select { font: inherit; }
+
+button {
+  cursor: pointer;
+  border: none;
+  transition: .2s;
+}
+
+button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+button:not(:disabled):active {
+  transform: scale(.97);
+}
+
+#app {
+  width: 100%;
+  max-width: 1050px;
+  margin: auto;
+  padding: 22px 16px 50px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.logo {
+  font-size: 29px;
+  font-weight: 900;
+  letter-spacing: -1.5px;
+}
+
+.logo span { color: var(--pink); }
+
+.tagline {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.card {
+  background: rgba(29,27,43,.95);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 23px;
+  margin-bottom: 18px;
+  box-shadow: 0 12px 35px #0002;
+}
+
+.hero {
+  text-align: center;
+  padding: 38px 22px;
+}
+
+.hero-emoji {
+  font-size: 65px;
+  margin-bottom: 10px;
+}
+
+h1 {
+  font-size: clamp(32px,7vw,53px);
+  line-height: 1.1;
+  margin: 10px 0;
+  font-weight: 900;
+}
+
+h2 {
+  font-size: 23px;
+  margin: 0 0 16px;
+}
+
+h3 { margin: 0 0 12px; }
+
+p { color: var(--muted); line-height: 1.6; }
+
+.muted { color: var(--muted); }
+
+.small { font-size: 12px; }
+
+.center { text-align: center; }
+
+.btn {
+  background: linear-gradient(110deg,var(--purple),var(--pink));
+  color: #171323;
+  font-weight: 900;
+  padding: 14px 22px;
+  border-radius: 13px;
+  width: 100%;
+  margin-top: 10px;
+  box-shadow: 0 6px 18px #a78bfa30;
+}
+
+.btn.secondary {
+  background: var(--panel2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.btn.danger {
+  background: #542638;
+  color: #fecdd3;
+}
+
+input, select {
+  width: 100%;
+  background: #12111e;
+  color: white;
+  border: 1px solid var(--border);
+  padding: 14px;
+  border-radius: 12px;
+  outline: none;
+  margin: 7px 0;
+}
+
+input:focus, select:focus {
+  border-color: var(--purple);
+}
+
+label {
+  display: block;
+  margin-top: 15px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.players {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(135px,1fr));
+  gap: 10px;
+}
+
+.player {
+  background: var(--panel2);
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.avatar {
+  font-size: 30px;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.host-tag {
+  color: var(--cyan);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.status {
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.room-code {
+  color: var(--cyan);
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: 8px;
+  text-align: center;
+  margin: 10px;
+}
+
+.timer {
+  font-size: 36px;
+  font-weight: 900;
+  color: var(--cyan);
+  text-align: center;
+  margin: 12px;
+}
+
+.timer.urgent { color: var(--danger); }
+
+.progress {
+  height: 8px;
+  background: #353149;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg,var(--purple),var(--pink));
+  transition: width .4s linear;
+}
+
+.phase-label {
+  color: var(--pink);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 11px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.word-grid {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 9px;
+}
+
+.word {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  color: white;
+  border-radius: 12px;
+  padding: 14px 5px;
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 55px;
+  overflow-wrap: anywhere;
+}
+
+.word.selected {
+  background: #624a96;
+  border: 2px solid var(--pink);
+}
+
+.emoji-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 14px 0;
+}
+
+.category-btn {
+  background: var(--panel2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 9px 13px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.category-btn.active {
+  background: var(--purple);
+  color: #171323;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8,1fr);
+  gap: 7px;
+}
+
+.emoji-btn {
+  font-size: 27px;
+  background: #29263c;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  padding: 9px 2px;
+}
+
+.emoji-btn.selected {
+  background: #514078;
+  border: 2px solid var(--pink);
+}
+
+.selected-emojis {
+  display: flex;
+  justify-content: center;
+  gap: 13px;
+  font-size: 34px;
+  margin: 16px;
+  min-height: 48px;
+}
+
+.emoji-slot {
+  width: 53px;
+  height: 53px;
+  border: 1px dashed #5b5572;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+}
+
+.clue-card {
+  background: var(--panel2);
+  padding: 15px;
+  border-radius: 15px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+
+.clue-emojis {
+  font-size: 33px;
+  letter-spacing: 5px;
+  min-height: 45px;
+  margin: 7px 0;
+}
+
+.vote-btn {
+  width: 100%;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  color: white;
+  border-radius: 12px;
+  padding: 13px;
+  margin: 5px 0;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+}
+
+.vote-btn.selected {
+  border: 2px solid var(--pink);
+  background: #49375f;
+}
+
+.podium {
+  display: flex;
+  justify-content: center;
+  align-items: end;
+  gap: 10px;
+  margin: 30px 0;
+}
+
+.podium-item {
+  flex: 1;
+  max-width: 180px;
+  text-align: center;
+  padding: 15px 5px;
+  border-radius: 13px 13px 0 0;
+  background: var(--panel2);
+}
+
+.podium-item.first {
+  background: linear-gradient(#7856a9,#3e315e);
+  min-height: 180px;
+}
+
+.podium-item.second { min-height: 135px; }
+.podium-item.third { min-height: 105px; }
+
+.podium-medal { font-size: 32px; }
+
+.score-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 13px 4px;
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+}
+
+.points {
+  color: var(--green);
+  font-weight: 900;
+}
+
+.result-word {
+  color: var(--cyan);
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.award {
+  background: #302743;
+  border: 1px solid #665084;
+  border-radius: 13px;
+  padding: 13px;
+  margin: 8px 0;
+}
+
+.award strong { color: var(--pink); }
+
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #342a48;
+  border: 1px solid var(--purple);
+  padding: 13px 20px;
+  border-radius: 12px;
+  z-index: 20;
+  max-width: 90%;
+  text-align: center;
+  box-shadow: 0 8px 25px #0008;
+}
+
+.hidden { display: none !important; }
+
+.connection {
+  font-size: 11px;
+  color: var(--green);
+  font-weight: 800;
+}
+
+.connection.offline { color: var(--danger); }
+
+@media(max-width:550px) {
+  #app { padding: 14px 11px 35px; }
+  .card { padding: 17px; border-radius: 17px; }
+  .word-grid { gap: 6px; }
+  .word { font-size: 11px; padding: 10px 3px; min-height: 51px; }
+  .emoji-grid { grid-template-columns: repeat(6,1fr); }
+  .emoji-btn { font-size: 25px; }
+  .grid2 { grid-template-columns: 1fr; }
+  .logo { font-size: 25px; }
+  .podium { gap: 5px; }
+}
+</style>
+</head>
+
+<body>
+<div id="app">
+  <header>
+    <div>
+      <div class="logo">🎭 Fak<span>emoji</span></div>
+      <div class="tagline">BLUFF WITH EMOJIS. FIND THE FAKER.</div>
+    </div>
+    <div id="connection" class="connection">● Connecting</div>
+  </header>
+
+  <main id="screen">
+    <div class="card center">
+      <div class="hero-emoji">🎭</div>
+      <h1>Fakemoji</h1>
+      <p>One faker. Three emojis. Can you spot the bluff?</p>
+      <p>Connecting to game server...</p>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+const socket = io();
+
+const $ = id => document.getElementById(id);
+
+const CATEGORIES = {
+  Faces: [
+    "😀","😃","😄","😁","😆","😅","😂","🤣",
+    "😊","😇","🙂","🙃","😉","😍","🥰","😘",
+    "😋","😎","🤔","🤫","🤭","😭","😡","🤯",
+    "🥳","😴","🤗","😱","🤤","😏","🤩","😬"
+  ],
+  Food: [
+    "🍎","🍊","🍋","🍉","🍇","🍓","🍒","🍍",
+    "🥭","🍌","🍑","🥥","🍅","🥑","🥕","🌽",
+    "🍕","🍔","🍟","🌭","🍿","🍩","🍪","🎂",
+    "🍰","🍫","🍬","🍭","🍜","🍣","🍚","☕"
+  ],
+  Animals: [
+    "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼",
+    "🐨","🐯","🦁","🐮","🐷","🐸","🐵","🐔",
+    "🐧","🐦","🦆","🦅","🦉","🦋","🐢","🐍",
+    "🐬","🐳","🦈","🐘","🦒","🦓","🐎","🐄"
+  ],
+  Nature: [
+    "🌞","🌝","🌙","⭐","🌈","☁️","🌧️","⛈️",
+    "❄️","🔥","💧","🌊","🌸","🌹","🌻","🌳",
+    "🌴","🍀","🌵","🍁","🌺","🌼","🌍","🌋"
+  ],
+  Activities: [
+    "⚽","🏀","🏈","⚾","🎾","🏏","🏆","🎯",
+    "🎮","🎲","🎸","🎹","🎤","🎧","🎬","🎨",
+    "🚴","🏊","🏃","🧘","💃","🕺","🎭","🎪"
+  ],
+  Objects: [
+    "🚗","🚕","🚌","🚂","✈️","🚀","🚲","🏍️",
+    "🏠","🏰","🏫","🏥","📱","💻","⌚","📷",
+    "💡","🔑","💎","🎁","💰","📚","✏️","🛏️",
+    "🪑","🧸","🔔","🧲","🛠️","🧹","🧳","🕯️"
+  ],
+  Symbols: [
+    "❤️","💔","💖","💯","💥","💫","✨","⚡",
+    "☀️","❄️","🎵","🎶","🔒","🔓","✅","❌",
+    "❓","❗","♻️","🚫","💤","🆘","🔴","🟢"
+  ]
+};
+
+let state = null;
+let selectedEmojis = [];
+let activeEmojiCategory = "Faces";
+let serverOffset = 0;
+let timerInterval = null;
+let toastTimeout = null;
+let joining = false;
+
+function getToken() {
+  let token = localStorage.getItem("fakemoji_token");
+
+  if (!token) {
+    token = Array.from(
+      crypto.getRandomValues(new Uint8Array(24)),
+      b => b.toString(16).padStart(2, "0")
+    ).join("");
+
+    localStorage.setItem("fakemoji_token", token);
+  }
+
+  return token;
+}
+
+function getName() {
+  return localStorage.getItem("fakemoji_name") || "";
+}
+
+function saveName(name) {
+  localStorage.setItem("fakemoji_name", name);
+}
+
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
+function toast(message) {
+  $("toast").textContent = message;
+  $("toast").classList.remove("hidden");
+
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => {
+    $("toast").classList.add("hidden");
+  }, 3000);
+}
+
+socket.on("connect", () => {
+  $("connection").textContent = "● Connected";
+  $("connection").classList.remove("offline");
+});
+
+socket.on("disconnect", () => {
+  $("connection").textContent = "● Reconnecting";
+  $("connection").classList.add("offline");
+});
+
+socket.on("connect_error", () => {
+  $("connection").textContent = "● Connection error";
+  $("connection").classList.add("offline");
+});
+
+socket.on("errorMessage", message => toast(message));
+
+socket.on("joined", data => {
+  joining = false;
+  localStorage.setItem("fakemoji_room", data.code);
+  history.replaceState(null, "", "/?room=" + data.code);
+  toast("Welcome to room " + data.code + "!");
+});
+
+socket.on("gameState", newState => {
+  state = newState;
+
+  if (newState.serverTime) {
+    serverOffset = newState.serverTime - Date.now();
+  }
+
+  if (newState.phase !== "picking") {
+    selectedEmojis = [];
+  }
+
+  render();
+});
+
+function emitJoin() {
+  if (!socket.connected || joining) return;
+
+  const params = new URLSearchParams(location.search);
+  const room = (
+    params.get("room") ||
+    localStorage.getItem("fakemoji_room") ||
+    ""
+  ).toUpperCase();
+
+  if (!room) {
+    renderHome();
+    return;
+  }
+
+  const savedName = getName();
+
+  if (!savedName) {
+    renderJoin(room);
+    return;
+  }
+
+  joining = true;
+
+  socket.emit("joinRoom", {
+    code: room,
+    name: savedName,
+    token: getToken()
+  });
+}
+
+function renderHome() {
+  $("screen").innerHTML = `
+    <section class="card hero">
+      <div class="hero-emoji">🎭 🤫 😂</div>
+      <h1>Can you spot<br>the <span style="color:var(--pink)">Faker?</span></h1>
+      <p>Everyone knows the secret word... except one player.<br>
+      Describe it using three emojis. Catch the bluffer!</p>
+    </section>
+
+    <section class="card">
+      <h2>🚀 Create a room</h2>
+      <label>Your nickname</label>
+      <input id="homeName" maxlength="20" placeholder="Enter your nickname"
+        value="${esc(getName())}">
+      <button class="btn" id="createBtn">Create a new game</button>
+    </section>
+
+    <section class="card">
+      <h2>🎮 Join a room</h2>
+      <label>Your nickname</label>
+      <input id="joinName" maxlength="20" placeholder="Enter your nickname"
+        value="${esc(getName())}">
+      <label>Four-letter room code</label>
+      <input id="joinCode" maxlength="4" placeholder="ABCD"
+        style="text-transform:uppercase;letter-spacing:5px">
+      <button class="btn secondary" id="joinBtn">Join game</button>
+    </section>
+
+    <section class="card">
+      <h2>📖 How to play</h2>
+      ${howToHTML()}
+    </section>
+  `;
+
+  $("createBtn").onclick = () => {
+    const name = $("homeName").value.trim();
+    if (!name) return toast("Enter your nickname.");
+
+    saveName(name);
+
+    socket.emit("createRoom", {
+      name,
+      token: getToken(),
+      rounds: 3,
+      category: "Desi Life"
+    });
+  };
+
+  $("joinBtn").onclick = () => {
+    const name = $("joinName").value.trim();
+    const code = $("joinCode").value.trim().toUpperCase();
+
+    if (!name) return toast("Enter your nickname.");
+    if (!/^[A-Z]{4}$/.test(code)) {
+      return toast("Enter a valid four-letter code.");
+    }
+
+    saveName(name);
+    joining = true;
+
+    socket.emit("joinRoom", {
+      name,
+      code,
+      token: getToken()
+    });
+  };
+}
+
+function renderJoin(room) {
+  $("screen").innerHTML = `
+    <section class="card">
+      <h2>🎮 Join room ${esc(room)}</h2>
+      <label>Your nickname</label>
+      <input id="newName" maxlength="20" placeholder="Enter your nickname">
+      <button class="btn" id="joinNow">Join game</button>
+    </section>
+  `;
+
+  $("joinNow").onclick = () => {
+    const name = $("newName").value.trim();
+    if (!name) return toast("Enter your nickname.");
+
+    saveName(name);
+    joining = true;
+
+    socket.emit("joinRoom", {
+      code: room,
+      name,
+      token: getToken()
+    });
+  };
+}
+
+function howToHTML() {
+  return `
+    <div class="score-row">
+      <span>1. 🕵️ One player is secretly the Faker.</span>
+    </div>
+    <div class="score-row">
+      <span>2. 👀 Everyone else sees the secret word.</span>
+    </div>
+    <div class="score-row">
+      <span>3. 🎨 Everyone picks exactly three emojis.</span>
+    </div>
+    <div class="score-row">
+      <span>4. 🗣️ Reveal clues, discuss and vote.</span>
+    </div>
+    <div class="score-row">
+      <span>5. 🎯 The caught Faker gets one guess!</span>
+    </div>
+    <p class="small">No typing clues. No letters, numbers or flags. Just emojis!</p>
+  `;
+}
+
+function playerCards() {
+  if (!state) return "";
+
+  return state.players.map((p, index) => `
+    <div class="player">
+      <span class="avatar">${["🦊","🐼","🐸","🐯","🐨","🐵","🦁","🐰"][index % 8]}</span>
+      <strong>${esc(p.name)}</strong>
+      ${p.isHost ? '<div class="host-tag">👑 HOST</div>' : ""}
+      <div class="status">${p.connected ? "● Online" : "○ Reconnecting"}</div>
+      ${p.late ? '<div class="small muted">Next round</div>' : ""}
+    </div>
+  `).join("");
+}
+
+function renderLobby() {
+  const isHost = state.isHost;
+
+  $("screen").innerHTML = `
+    <section class="card center">
+      <div class="phase-label">GAME LOBBY</div>
+      <h2>🎭 Waiting for players</h2>
+      <div class="room-code">${esc(state.code)}</div>
+      <p>Share this room code with your friends.</p>
+      <button class="btn secondary" id="copyInvite">🔗 Copy invite link</button>
+    </section>
+
+    <section class="card">
+      <h2>👥 Players (${state.players.filter(p => p.connected).length}/8)</h2>
+      <div class="players">${playerCards()}</div>
+      <p class="small">At least 3 connected players are required to start.</p>
+    </section>
+
+    ${isHost ? `
+    <section class="card">
+      <h2>⚙️ Game settings</h2>
+
+      <label>Number of rounds</label>
+      <select id="roundSelect">
+        <option value="3" ${state.rounds === 3 ? "selected" : ""}>3 rounds</option>
+        <option value="5" ${state.rounds === 5 ? "selected" : ""}>5 rounds</option>
+        <option value="8" ${state.rounds === 8 ? "selected" : ""}>8 rounds</option>
+      </select>
+
+      <label>Word category</label>
+      <select id="categorySelect">
+        ${["Food","Animals","Desi Life","Movies","Places"].map(c =>
+          `<option ${state.category === c ? "selected" : ""}>${c}</option>`
+        ).join("")}
+      </select>
+
+      <button class="btn" id="saveSettings">Save settings</button>
+      <button class="btn" id="startBtn"
+        ${state.players.filter(p => p.connected).length < 3 ? "disabled" : ""}>
+        🚀 Start game
+      </button>
+    </section>
+    ` : `
+      <section class="card center">
+        <h2>⏳ Waiting for the host</h2>
+        <p>The host will start the game shortly.</p>
+      </section>
+    `}
+
+    <section class="card">
+      <h3>📖 How to play</h3>
+      ${howToHTML()}
+    </section>
+
+    <button class="btn danger" id="leaveBtn">Leave room</button>
+  `;
+
+  $("copyInvite").onclick = () => {
+    const url = location.origin + "/?room=" + state.code;
+    copyText(url);
+  };
+
+  if (isHost) {
+    $("saveSettings").onclick = () => {
+      socket.emit("updateSettings", {
+        rounds: Number($("roundSelect").value),
+        category: $("categorySelect").value
+      });
+
+      toast("Settings saved!");
+    };
+
+    $("startBtn").onclick = () => socket.emit("startGame");
+  }
+
+  $("leaveBtn").onclick = leaveRoom;
+}
+
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text)
+      .then(() => toast("Invite link copied!"))
+      .catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const input = document.createElement("textarea");
+  input.value = text;
+  document.body.appendChild(input);
+  input.select();
+
+  try {
+    document.execCommand("copy");
+    toast("Copied!");
+  } catch {
+    toast("Copy unavailable. Share: " + text);
+  }
+
+  input.remove();
+}
+
+function currentTimeLeft() {
+  if (!state.deadline) return 0;
+  return Math.max(
+    0,
+    Math.ceil((state.deadline - (Date.now() + serverOffset)) / 1000)
+  );
+}
+
+function timerHTML() {
+  const left = currentTimeLeft();
+  const total = state.timerLengths[state.phase] || 60;
+  const percent = Math.max(0, Math.min(100, left / total * 100));
+
+  return `
+    <div class="timer ${left <= 10 ? "urgent" : ""}" id="timerText">${left}s</div>
+    <div class="progress">
+      <div class="progress-bar" id="timerBar" style="width:${percent}%"></div>
+    </div>
+  `;
+}
+
+function phaseHeading(title, subtitle) {
+  return `
+    <div class="phase-label">${esc(title)}</div>
+    <h2 class="center">${esc(subtitle)}</h2>
+    ${timerHTML()}
+  `;
+}
+
+function renderPicking() {
+  const isFaker = state.myRole === "faker";
+  const hasSubmitted = state.myEmojis.length === 3;
+  const mySelection = hasSubmitted ? state.myEmojis : selectedEmojis;
+
+  $("screen").innerHTML = `
+    <section class="card center">
+      ${phaseHeading("EMOJI PICKING", "Describe the secret word!")}
+
+      <p>Round ${state.currentRound} of ${state.rounds}</p>
+      <p>Category: <strong>${esc(state.category)}</strong></p>
+
+      ${isFaker ? `
+        <div class="award">
+          <h2>🕵️ You are the FAKER!</h2>
+          <p>You don't know the secret word. Use the category and board to bluff!</p>
+        </div>
+      ` : `
+        <div class="award">
+          <p>Your secret word is:</p>
+          <div class="result-word">${esc(state.secretWord)}</div>
+          <p class="small">Don't reveal it directly!</p>
+        </div>
+      `}
+    </section>
+
+    <section class="card">
+      <h3>📝 The 16-word board</h3>
+      <div class="word-grid">
+        ${state.board.map(word => `<div class="word">${esc(word)}</div>`).join("")}
+      </div>
+    </section>
+
+    <section class="card">
+      <h3 class="center">🎨 Choose exactly 3 emojis</h3>
+
+      <div class="selected-emojis">
+        ${[0,1,2].map(i => `
+          <div class="emoji-slot">${mySelection[i] || "＋"}</div>
+        `).join("")}
+      </div>
+
+      ${hasSubmitted ? `
+        <div class="center award">
+          <h3>🔒 Your emojis are locked!</h3>
+          <p>Waiting for the other players...</p>
+        </div>
+      ` : `
+        <div class="emoji-categories">
+          ${Object.keys(CATEGORIES).map(category => `
+            <button class="category-btn ${activeEmojiCategory === category ? "active" : ""}"
+              data-category="${category}">${category}</button>
+          `).join("")}
+        </div>
+
+        <div class="emoji-grid">
+          ${CATEGORIES[activeEmojiCategory].map(emoji => `
+            <button class="emoji-btn ${mySelection.includes(emoji) ? "selected" : ""}"
+              data-emoji="${emoji}" ${mySelection.length >= 3 && !mySelection.includes(emoji) ? "disabled" : ""}>
+              ${emoji}
+            </button>
+          `).join("")}
+        </div>
+
+        <button class="btn" id="lockEmojis"
+          ${mySelection.length !== 3 ? "disabled" : ""}>
+          🔒 Lock in my emojis
+        </button>
+      `}
+      <p class="small center">Selected: ${mySelection.length}/3 · No typing allowed.</p>
+    </section>
+
+    <section class="card center">
+      <h3>Players locked in</h3>
+      <p>${state.lockedCount} / ${state.roundPlayerCount}</p>
+    </section>
+  `;
+
+  document.querySelectorAll("[data-category]").forEach(button => {
+    button.onclick = () => {
+      activeEmojiCategory = button.dataset.category;
+      renderPicking();
+    };
+  });
+
+  document.querySelectorAll("[data-emoji]").forEach(button => {
+    button.onclick = () => {
+      const emoji = button.dataset.emoji;
+
+      if (selectedEmojis.includes(emoji)) {
+        selectedEmojis = selectedEmojis.filter(e => e !== emoji);
+      } else if (selectedEmojis.length < 3) {
+        selectedEmojis.push(emoji);
+      }
+
+      renderPicking();
+    };
+  });
+
+  const lock = $("lockEmojis");
+
+  if (lock) {
+    lock.onclick = () => {
+      if (selectedEmojis.length !== 3) return;
+
+      socket.emit("submitEmojis", selectedEmojis);
+      selectedEmojis = [];
+    };
+  }
+}
+
+function renderVoting() {
+  const isFaker = state.myRole === "faker";
+
+  $("screen").innerHTML = `
+    <section class="card center">
+      ${phaseHeading("DISCUSS & VOTE", "Who is the Faker?")}
+      <p>Round ${state.currentRound} of ${state.rounds}</p>
+      ${isFaker
+        ? '<div class="award">🕵️ Keep bluffing! Try not to get caught.</div>'
+        : '<p>Look carefully at the clues. Who seems suspicious?</p>'}
+    </section>
+
+    <section class="card">
+      <h2>🎭 Revealed emoji clues</h2>
+      <div class="grid2">
+        ${state.roundPlayerCount ? state.players
+          .filter(p => state.emojis && state.emojis[p.id] !== undefined)
+          .map(p => `
+            <div class="clue-card">
+              <strong>${esc(p.name)}</strong>
+              <div class="clue-emojis">
+                ${state.emojis[p.id].length
+                  ? state.emojis[p.id].join(" ")
+                  : '<span class="muted small">No emojis</span>'}
+              </div>
+            </div>
+          `).join("") : ""}
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>🗳️ Cast your vote</h2>
+      <p>You cannot vote for yourself. You can change your vote until the voting phase ends.</p>
+
+      ${state.myRole === "waiting" ? `
+        <p>You are waiting for the next round.</p>
+      ` : state.myVote ? `
+        <div class="award">
+          <p>Your current vote:</p>
+          <h3>${esc(state.players.find(p => p.id === state.myVote)?.name || "Unknown")}</h3>
+          <p class="small">Choose someone else to change your vote.</p>
+        </div>
+      ` : `
+        <p class="muted">Choose one player below.</p>
+      `}
+
+      ${state.players.filter(p =>
+        state.roundPlayerCount &&
+        p.id !== state.myId &&
+        state.emojis &&
+        state.emojis[p.id] !== undefined
+      ).map(p => `
+        <button class="vote-btn ${state.myVote === p.id ? "selected" : ""}"
+          data-vote="${p.id}">
+          <span>👤 ${esc(p.name)}</span>
+          <span>${state.myVote === p.id ? "✓ Selected" : "Vote"}</span>
+        </button>
+      `).join("")}
+
+      <p class="small center">Votes submitted: ${state.voteCount}/${state.roundPlayerCount}</p>
+    </section>
+  `;
+
+  document.querySelectorAll("[data-vote]").forEach(button => {
+    button.onclick = () => {
+      socket.emit("submitVote", button.dataset.vote);
+    };
+  });
+}
+
+function renderGuessing() {
+  const isFaker = state.myRole === "faker";
+
+  $("screen").innerHTML = `
+    <section class="card center">
+      ${phaseHeading("FINAL CHANCE", "The Faker has been caught!")}
+      <div class="hero-emoji">😱</div>
+      <h2>${isFaker ? "Can you guess the secret word?" : "The Faker gets one guess!"}</h2>
+      <p>Round ${state.currentRound} of ${state.rounds}</p>
+    </section>
+
+    ${isFaker ? `
+      <section class="card">
+        <h2 class="center">🎯 Choose your guess</h2>
+        <div class="word-grid">
+          ${state.guessOptions.map(word => `
+            <button class="word" data-guess="${esc(word)}">${esc(word)}</button>
+          `).join("")}
+        </div>
+        <p class="small center">You have one chance. Choose wisely!</p>
+      </section>
+    ` : `
+      <section class="card center">
+        <h2>⏳ Waiting for the Faker...</h2>
+        <p>The Faker is choosing one word from the board.</p>
+      </section>
+    `}
+  `;
+
+  document.querySelectorAll("[data-guess]").forEach(button => {
+    button.onclick = () => {
+      if (!confirm("Your guess is " + button.dataset.guess + "? You only get one attempt.")) return;
+
+      socket.emit("submitGuess", button.dataset.guess);
+    };
+  });
+}
+
+function renderResults() {
+  const r = state.lastRound;
+
+  if (!r) {
+    $("screen").innerHTML = `
+      <section class="card center">
+        <h2>Round complete</h2>
+        <p>Preparing results...</p>
+      </section>
+    `;
+    return;
+  }
+
+  const outcomeText = {
+    escaped: "🏃 The Faker escaped!",
+    guessed: "🎯 The Faker guessed correctly!",
+    wrong: "😂 The Faker was caught and guessed wrong!"
+  }[r.outcome];
+
+  $("screen").innerHTML = `
+    <section class="card center">
+      ${phaseHeading("ROUND RESULTS", "Round " + r.round + " complete")}
+      <div class="hero-emoji">${r.outcome === "escaped" ? "🕵️" : r.outcome === "guessed" ? "🎯" : "😂"}</div>
+      <h2>${outcomeText}</h2>
+      <p>The Faker was <strong>${esc(r.faker)}</strong></p>
+      <p>The secret word was</p>
+      <div class="result-word">${esc(r.secretWord)}</div>
+      <p class="small">Category: ${esc(r.category)}</p>
+      ${r.guessResult ? `
+        <div class="award">
+          Faker's guess: <strong>${esc(r.guessResult.guess)}</strong>
+          ${r.guessResult.correct ? " ✅" : " ❌"}
+        </div>
+      ` : ""}
+    </section>
+
+    <section class="card">
+      <h2>🗳️ Who voted for whom?</h2>
+      ${r.votes.map(v => `
+        <div class="score-row">
+          <span>${esc(v.voter)}</span>
+          <span>➡️ ${esc(v.votedFor)}</span>
+        </div>
+      `).join("")}
+    </section>
+
+    <section class="card">
+      <h2>⭐ Points earned this round</h2>
+      ${r.points.map(p => `
+        <div class="score-row">
+          <strong>${esc(p.name)}</strong>
+          <span class="points">+${p.earned}</span>
+        </div>
+      `).join("")}
+    </section>
+
+    <section class="card">
+      <h2>📊 Current scoreboard</h2>
+      ${[...state.scoreboard].sort((a,b) => b.score - a.score).map((p,i) => `
+        <div class="score-row">
+          <span>${i + 1}. ${esc(p.name)}</span>
+          <strong>${p.score} pts</strong>
+        </div>
+      `).join("")}
+    </section>
+
+    <section class="card center">
+      <p>Next round starts automatically in a few seconds.</p>
+      ${timerHTML()}
+    </section>
+  `;
+}
+
+function renderFinished() {
+  const scores = [...state.scoreboard].sort((a,b) => b.score - a.score);
+  const medals = ["🥇","🥈","🥉"];
+  const podiumOrder = [
+    scores[1],
+    scores[0],
+    scores[2]
+  ].filter(Boolean);
+
+  $("screen").innerHTML = `
+    <section class="card center">
+      <div class="hero-emoji">🏆 🎉 🏆</div>
+      <div class="phase-label">GAME OVER</div>
+      <h1>That's a wrap!</h1>
+      <p>Everyone played. Some bluffed. Some got caught.</p>
+    </section>
+
+    <section class="card">
+      <h2 class="center">🏆 Final podium</h2>
+      <div class="podium">
+        ${podiumOrder.map(p => {
+          const rank = scores.indexOf(p);
+          const cls = rank === 0 ? "first" : rank === 1 ? "second" : "third";
+
+          return `
+            <div class="podium-item ${cls}">
+              <div class="podium-medal">${medals[rank] || "🏅"}</div>
+              <strong>${esc(p.name)}</strong>
+              <div>${p.score} points</div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>📊 Final scoreboard</h2>
+      ${scores.map((p,i) => `
+        <div class="score-row">
+          <strong>${i + 1}. ${esc(p.name)}</strong>
+          <span class="points">${p.score} pts</span>
+        </div>
+      `).join("")}
+    </section>
+
+    <section class="card">
+      <h2>🎖️ Fun awards</h2>
+      ${state.awards.map(a => `
+        <div class="award">
+          <strong>${esc(a.title)}</strong>
+          <div>${esc(a.name)}</div>
+          <div class="small muted">${esc(a.description)}</div>
+        </div>
+      `).join("")}
+    </section>
+
+    ${state.isHost ? `
+      <button class="btn" id="againBtn">🔄 Play again</button>
+    ` : `
+      <section class="card center">
+        <p>Waiting for the host to start another game.</p>
+      </section>
+    `}
+    <button class="btn secondary" id="copyAgain">🔗 Share room</button>
+  `;
+
+  if ($("againBtn")) {
+    $("againBtn").onclick = () => socket.emit("playAgain");
+  }
+
+  $("copyAgain").onclick = () => {
+    copyText(location.origin + "/?room=" + state.code);
+  };
+}
+
+function render() {
+  if (!state) return;
+
+  if (timerInterval) clearInterval(timerInterval);
+
+  switch (state.phase) {
+    case "lobby":
+      renderLobby();
+      break;
+    case "picking":
+      renderPicking();
+      break;
+    case "voting":
+      renderVoting();
+      break;
+    case "guessing":
+      renderGuessing();
+      break;
+    case "results":
+      renderResults();
+      break;
+    case "finished":
+      renderFinished();
+      break;
+    default:
+      renderHome();
+  }
+
+  if (state.deadline && state.phase !== "lobby" && state.phase !== "finished") {
+    timerInterval = setInterval(updateTimer, 250);
+  }
+}
+
+function updateTimer() {
+  if (!state || !state.deadline) return;
+
+  const left = currentTimeLeft();
+  const total = state.timerLengths[state.phase] || 60;
+  const percent = Math.max(0, Math.min(100, left / total * 100));
+
+  const text = $("timerText");
+  const bar = $("timerBar");
+
+  if (text) {
+    text.textContent = left + "s";
+    text.classList.toggle("urgent", left <= 10);
+  }
+
+  if (bar) bar.style.width = percent + "%";
+}
+
+function leaveRoom() {
+  if (!confirm("Are you sure you want to leave this room?")) return;
+
+  socket.emit("leaveRoom");
+
+  localStorage.removeItem("fakemoji_room");
+  history.replaceState(null, "", "/");
+
+  state = null;
+  selectedEmojis = [];
+
+  renderHome();
+}
+
+const params = new URLSearchParams(location.search);
+const roomFromUrl = params.get("room");
+
+if (roomFromUrl) {
+  localStorage.setItem("fakemoji_room", roomFromUrl.toUpperCase());
+}
+
+socket.on("connect", () => {
+  if (localStorage.getItem("fakemoji_room")) {
+    emitJoin();
+  } else {
+    renderHome();
+  }
+});
+
+renderHome();
+</script>
+</body>
+</html>
